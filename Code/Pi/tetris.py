@@ -97,8 +97,9 @@ class Tetris(object):
 	def init_game(self):
 		self.board = new_board()
 		self.new_stone()
-		# self.level = 1
+		self.level = 1
 		self.score = 0
+		self.time1 = time.time()
 
 	def move(self, delta_x):
 		if not self.gameover:
@@ -119,6 +120,7 @@ class Tetris(object):
 
 	def drop(self, soft):
 		if not self.gameover:
+			self.time1 = time.time()
 			self.score += 1 if soft else 0
 			self.stone_y += 1
 			if check_collision(self.board, self.stone, (self.stone_x, self.stone_y)):
@@ -158,6 +160,7 @@ class Tetris(object):
 			leds = [(i, j) for j in range(len(added_boards) - 1) for i in range(len(added_boards[j])) if
 					added_boards[j][i] > 0]
 
+			# illuminate list of leds
 			driver.leds_lumos(leds)
 
 			# controls
@@ -170,22 +173,19 @@ class Tetris(object):
 			# elif b4.is_pressed:
 			# 	self.drop(True)
 
-			# drop per second
-			if count % maxfps == 0:
+
+			# increase game speed according to level and tetirs manual
+			if time.time() - self.time1 < (0.8 - ((self.level - 1) * 0.007))**(self.level - 1):
+				time.sleep(.005)
+				drop_qued = False
+			else:
+				drop_qued = True
+
+			# drop and print
+			if drop_qued:
 				print_board(added_boards)
 				print('Leds:', leds)
 				self.drop(False)
-
-				# increase game speed
-				# global maxfps
-				# if count // maxfps == 5:
-				# 	count = 0
-				# 	maxfps -= 5
-				# 	print(maxfps)
-
-			t1 = time.time()
-			while time.time() - t1 < (1.0 / maxfps):
-				time.sleep(.01)
 
 
 if __name__ == '__main__':
