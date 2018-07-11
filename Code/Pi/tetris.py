@@ -14,7 +14,6 @@ driver.setup()
 
 cols = 10
 rows = 20
-maxfps = 20
 
 shapes = [
 	[[1, 1, 1], [0, 1, 0]],
@@ -26,7 +25,8 @@ shapes = [
 	[[1, 1], [1, 1]]
 ]
 
-scores = [40, 100, 300, 1200]
+line_cleared_scores = [100, 300, 500, 800]
+line_clears_awarded = [1, 3, 5, 8]
 
 
 def rotate_clockwise(shape):
@@ -82,7 +82,15 @@ def print_board(b):
 class Tetris(object):
 	def __init__(self):
 		self.next_stone = shapes[rand(len(shapes))]
-		self.init_game()
+		self.board = new_board()
+		self.new_stone()
+		self.level = 1
+		self.score = 0
+		self.time1 = time.time()
+		self.b2b = False
+		self.cleared_lines = 0
+		self.lines_to_level_up = 5
+
 
 	def new_stone(self):
 		self.stone = self.next_stone[:]
@@ -91,25 +99,17 @@ class Tetris(object):
 		self.stone_y = 0
 
 		if check_collision(self.board, self.stone, (self.stone_x, self.stone_y)):
-			self.gameover = True
 			self.quit()
 
-	def init_game(self):
-		self.board = new_board()
-		self.new_stone()
-		self.level = 1
-		self.score = 0
-		self.time1 = time.time()
 
 	def move(self, delta_x):
-		if not self.gameover:
-			new_x = self.stone_x + delta_x
-			if new_x < 0:
-				new_x = 0
-			if new_x > cols - len(self.stone[0]):
-				new_x = cols - len(self.stone[0])
-			if not check_collision(self.board, self.stone, (new_x, self.stone_y)):
-				self.stone_x = new_x
+		new_x = self.stone_x + delta_x
+		if new_x < 0:
+			new_x = 0
+		if new_x > cols - len(self.stone[0]):
+			new_x = cols - len(self.stone[0])
+		if not check_collision(self.board, self.stone, (new_x, self.stone_y)):
+			self.stone_x = new_x
 
 	def quit(self):
 		print('Game Over')
@@ -118,41 +118,48 @@ class Tetris(object):
 		driver.tear_down()
 		sys.exit()
 
-	def drop(self, soft):
-		if not self.gameover:
-			self.time1 = time.time()
-			self.score += 1 if soft else 0
-			self.stone_y += 1
-			if check_collision(self.board, self.stone, (self.stone_x, self.stone_y)):
-				self.board = join_matrixes(self.board, self.stone, (self.stone_x, self.stone_y))
-				self.new_stone()
-				cleared_rows = 0
-				while True:
-					for i, row in enumerate(self.board[:-1]):
-						if 0 not in row:
-							self.board = remove_row(self.board, i)
-							cleared_rows += 1
-							break
-					break
-				self.score += scores[cleared_rows - 1] if cleared_rows > 0 else 0
+	def drop(self, soft=False):
+		self.time1 = time.time()
+		self.score += 1 if soft else 0
+		self.stone_y += 1
+		if check_collision(self.board, self.stone, (self.stone_x, self.stone_y)):
+			self.board = join_matrixes(self.board, self.stone, (self.stone_x, self.stone_y))
+			self.new_stone()
+			cur_cleared_lines = 0
+			while True:
+				for i, row in enumerate(self.board[:-1]):
+					if 0 not in row:
+						self.board = remove_row(self.board, i)
+						cur_cleared_lines += 1
+						break
+				break
+
+			if cur_cleared_lines > 0:
+				self.score += int(line_cleared_scores[cur_cleared_lines - 1] * self.level)
+				self.cleared_lines += line_clears_awarded[cur_cleared_lines - 1]
+
+			# check for level up
+			if self.cleared_lines + cur_cleared_lines > self.lines_to_level_up:
+				self.cleared_lines = (self.cleared_lines + cur_cleared_lines) % self.lines_to_level_up
+				self.lines_to_level_up += 5
+				self.level += 1
+
+			# check for back-to-back tetris scoring
+			if cur_cleared_lines == 4:
+				if self.b2b:
+					self.score += int(line_cleared_scores[cur_cleared_lines - 1] * self.level * .5)
+				self.b2b = True
+			elif cur_cleared_lines != 0:
+				self.b2b = False
+
 
 	def rotate_stone(self):
-		if not self.gameover:
-			new_stone = rotate_clockwise(self.stone)
-			if not check_collision(self.board, new_stone, (self.stone_x, self.stone_y)):
-				self.stone = new_stone
-
-	def start_game(self):
-		if self.gameover:
-			self.init_game()
-			self.gameover = False
+		new_stone = rotate_clockwise(self.stone)
+		if not check_collision(self.board, new_stone, (self.stone_x, self.stone_y)):
+			self.stone = new_stone
 
 	def run(self):
-		self.gameover = False
-		count = 0
-
-		while not self.gameover:
-			count += 1
+		while 1:
 			tot_board = new_board()
 			for i in range(len(self.stone)):
 				tot_board[self.stone_y + i][self.stone_x:self.stone_x + len(self.stone[i])] = self.stone[i]
@@ -174,18 +181,18 @@ class Tetris(object):
 			# 	self.drop(True)
 
 
-			# increase game speed according to level and tetirs manual
+			# increase game speed according to level - rate according to Commodore 64 Tetris
 			if time.time() - self.time1 < (0.8 - ((self.level - 1) * 0.007))**(self.level - 1):
 				time.sleep(.005)
 				drop_qued = False
 			else:
 				drop_qued = True
 
-			# drop and print
+			# drop and print board
 			if drop_qued:
+				self.drop()
 				print_board(added_boards)
 				print('Leds:', leds)
-				self.drop(False)
 
 
 if __name__ == '__main__':
